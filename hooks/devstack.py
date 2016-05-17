@@ -550,7 +550,8 @@ class Devstack(object):
         with open(get_pip, "wb") as fd:
             fd.write(html)
         os.chmod(get_pip, 0o755)
-        run_command([get_pip, ], username="root")
+        pip_version = self.config.get('pip-version')
+        run_command([get_pip, pip_version], username="root")
 
     def _set_pip_mirror(self):
         pypi_mirrors = list(set(self.config.get("pypi-mirror").split()))
