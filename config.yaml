@@ -171,3 +171,8 @@ options:
 
       This will set python-openstackclient in LIBS_FROM_GIT and will set OPENSTACKCLIENT_BRANCH=master
       If the branch is ommited, zuul-branch will be used
+  pip-version:
+    type: string
+    default: ""
+    description: |
+      Version of pip to install, example: pip==8.1.1
