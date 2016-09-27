@@ -21,7 +21,7 @@ import ConfigParser
 import urllib2
 import shutil
 import netifaces
-import json
+import yaml
 import base64
 import netaddr
 import socket
@@ -124,7 +124,7 @@ class DevstackContext(object):
             creds = self.relation_data[i].get("ad_credentials")
             if not creds:
                 continue
-            credential_data = json.loads(base64.b64decode(creds).decode("utf-16"))
+            credential_data = yaml.load(base64.b64decode(creds).decode("utf-16"))
             with open(location, "wb") as fd:                                    
                 for i in credential_data.keys():                                          
                     fd.write("%s=%s\n" % (i.upper(), credential_data[i]))
@@ -450,6 +450,7 @@ class Devstack(object):
     def _get_context(self):
         context = {
             "devstack_ip": None,
+            "tunnel_endpoint_ip": None,
             "enabled_services": None,
             "ml2_mechanism": None,
             "tenant_network_type": None,
@@ -480,7 +481,18 @@ class Devstack(object):
                 context[k] = val
 
         # add dynamic variables here
-        context["devstack_ip"] = self._resolve_address(hookenv.unit_private_ip())
+        devstack_ip = self._resolve_address(hookenv.unit_private_ip())
+        hookenv.log("Setting devstack_ip to: %s" % devstack_ip)
+        context["devstack_ip"] = devstack_ip
+        if context["enable_tunneling"]:
+            data_port = self._get_data_port()
+            try:
+                data_port_ip = netifaces.ifaddresses(data_port)[netifaces.AF_INET][0]['addr']
+            except KeyError:
+                data_port = data_port.replace("br-", "")
+                data_port_ip = netifaces.ifaddresses(data_port)[netifaces.AF_INET][0]['addr']
+            hookenv.log("Using data port %s with IP %s for OVS local_ip" % (data_port, data_port_ip))
+            context["tunnel_endpoint_ip"] = data_port_ip
         context["password"] = self.password
         if self.config.get("disable-ipv6"):
             context["ip_version"] = 4
@@ -538,25 +550,24 @@ class Devstack(object):
         with open(get_pip, "wb") as fd:
             fd.write(html)
         os.chmod(get_pip, 0o755)
-        run_command([get_pip, ], username="root")
+        pip_version = self.config.get('pip-version')
+        run_command([get_pip, pip_version], username="root")
 
     def _set_pip_mirror(self):
-        pypi_mirror = self.config.get("pypi-mirror")
-        if pypi_mirror is None:
+        pypi_mirrors = list(set(self.config.get("pypi-mirror").split()))
+        mirror_hosts = list(set(urlparse.urlparse(m).hostname for m in pypi_mirrors))
+        if not pypi_mirrors:
             return
         # generate config
         config = ConfigParser.RawConfigParser()
         config.add_section('global')
-        config.set('global', 'index-url', pypi_mirror)
-        # create pip folder
-        home = self.pwd.pw_dir
-        pip_dir = os.path.join(home, ".pip")
-        if os.path.isdir(pip_dir) is False:
-            os.makedirs(pip_dir, 0o755)
-            os.chown(pip_dir, self.pwd.pw_uid, self.pwd.pw_gid)
-        pip_conf = os.path.join(pip_dir, "pip.conf")
-        # write pip config
-        with open(pip_conf, "wb") as fd:
+        config.add_section('install')
+        config.set('global', 'index-url', pypi_mirrors[0])
+        if len(pypi_mirrors) > 1:
+            config.set('global', 'extra-index-url', ' '.join(m for m in pypi_mirrors[1:]))
+        config.set('install', 'trusted-host', ' '.join(h for h in mirror_hosts))
+        # Set the mirror os-wide and write it
+        with open("/etc/pip.conf", "wb") as fd:
             config.write(fd)
         return True
 
@@ -583,15 +594,24 @@ class Devstack(object):
 
     def _assign_interfaces(self):
         PHY_BR = "br-%s" % self.context["data_iface"]
-        assign_ext_port = [
-            "ovs-vsctl", "--", "--may-exist", "add-port", EXT_BR, self.context["ext_iface"],
-        ]
-        run_command(assign_ext_port, username="root")
-
         assign_data_port = [
             "ovs-vsctl", "--", "--may-exist", "add-port", PHY_BR, self.context["data_iface"],
         ]
         run_command(assign_data_port, username="root")
+
+        if self.context["enable_tunneling"]:
+            run_command(["ifconfig", self.context["data_iface"], "0.0.0.0", "promisc", "up"], username="root")
+            run_command(["dhclient", "br-%s" % self.context["data_iface"]], username="root")
+            br_ex_ip = netifaces.ifaddresses(EXT_BR)[netifaces.AF_INET][0]['addr']
+            br_ex_mask = netifaces.ifaddresses(EXT_BR)[netifaces.AF_INET][0]['netmask']
+            run_command(["iptables", "-t", "nat", "-A", "POSTROUTING", "-s", "%s/%s" % (br_ex_ip, br_ex_mask), "-o", 
+                "juju-br0", "-j", "MASQUERADE"], username="root")
+        else:
+            assign_ext_port = [
+                "ovs-vsctl", "--", "--may-exist", "add-port", EXT_BR, self.context["ext_iface"],
+            ]
+            run_command(assign_ext_port, username="root")
+
         return None
 
     def _write_keystonerc(self):
