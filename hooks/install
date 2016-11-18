@@ -67,6 +67,7 @@ def install():
         devstack.run_command(["brctl", "delif", data_port, data_port.replace("br-", "")], username="root")
         # This will fail if you have more interfaces in the bridge 
         # (should not happen unless you build an lxd on this host before deploying this charm)
+        devstack.run_command(["ifconfig", data_port, "down"], username="root")
         devstack.run_command(["brctl", "delbr", data_port], username="root")
     d = devstack.Devstack(username=devstack.DEFAULT_USER)
     d.run()
