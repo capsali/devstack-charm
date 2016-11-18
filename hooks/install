@@ -21,6 +21,22 @@ import devstack
 
 from charmhelpers.core import hookenv
 
+import re
+
+
+def parse_interfaces_file(interfaces_file):
+    with open(interfaces_file) as f:
+        vals = ("auto", "source")
+        tmp = []
+        for line in f:
+            if line.startswith(vals):
+                yield tmp
+                tmp = [line]
+            else:
+                tmp.append(line)
+    if tmp:
+        yield tmp
+
 
 def install():
     hookenv.log('Installing devstack')
@@ -39,7 +55,18 @@ def install():
     data_ports = config.get("data-port", "eth1")
     data_port = devstack.get_port(data_ports)
     if data_port.startswith("br-"):
+        ret = []
+        for iface in list(parse_interfaces_file("/etc/network/interfaces")):
+            if iface and data_port not in iface[0]:
+                ret.append(iface)
+        new_interfaces = ''.join([item for sublist in ret for item in sublist])
+        f = open("/etc/network/interfaces", "w")
+        f.write(new_interfaces)
+        f.close()
+
         devstack.run_command(["brctl", "delif", data_port, data_port.replace("br-", "")], username="root")
+        # This will fail if you have more interfaces in the bridge 
+        # (should not happen unless you build an lxd on this host before deploying this charm)
         devstack.run_command(["brctl", "delbr", data_port], username="root")
     d = devstack.Devstack(username=devstack.DEFAULT_USER)
     d.run()
