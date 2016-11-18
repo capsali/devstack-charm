@@ -51,7 +51,8 @@ def install():
     devstack.install_extra_packages()
     devstack.sync_time()
 
-    # remove juju 2.x created bridge
+    # remove juju 2.x created bridge, and set the ip on the interface
+    # caution: ugly hacks ahead
     data_ports = config.get("data-port", "eth1")
     data_port = devstack.get_port(data_ports)
     if data_port.startswith("br-"):
@@ -59,6 +60,21 @@ def install():
         for iface in list(parse_interfaces_file("/etc/network/interfaces")):
             if iface and data_port not in iface[0]:
                 ret.append(iface)
+            else:
+                for val in iface:
+                    if val.strip().startswith("address"):
+                        ip = val.strip().split()[1]
+                    if val.strip().startswith("gateway"):
+                        gw = val.strip().split()[1]
+
+        for r in ret:
+            if r and br.replace("br-", "") in r[0]:
+                del(r[-1])
+                r[1] = r[1].replace("manual", "static")
+                r.append("    address %s\n" % ip)
+                r.append("    gateway %s\n" % gw)
+                r.append("\n")
+
         new_interfaces = ''.join([item for sublist in ret for item in sublist])
         f = open("/etc/network/interfaces", "w")
         f.write(new_interfaces)
@@ -69,6 +85,7 @@ def install():
         # (should not happen unless you build an lxd on this host before deploying this charm)
         devstack.run_command(["ifconfig", data_port, "down"], username="root")
         devstack.run_command(["brctl", "delbr", data_port], username="root")
+        devstack.run_command(["dhclient", "-v", data_port.replace("br-", "")], username="root")
     d = devstack.Devstack(username=devstack.DEFAULT_USER)
     d.run()
 
