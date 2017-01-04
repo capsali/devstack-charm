@@ -67,18 +67,13 @@ def install():
                     if val.strip().startswith("gateway"):
                         gw = val.strip().split()[1]
 
-        if not gw or not ip:
-            hookenv.log("Could not get ip and gateway for interface %s" % data_port)
-        else:
-            hookenv.log("Using ip %s and gateway %s for data port %s" % (ip, gw, data_port.replace("br-", "")))
-
-            for r in ret:
-                if r and br.replace("br-", "") in r[0]:
-                    del(r[-1])
-                    r[1] = r[1].replace("manual", "static")
-                    r.append("    address %s\n" % ip)
-                    r.append("    gateway %s\n" % gw)
-                    r.append("\n")
+        for r in ret:
+            if r and br.replace("br-", "") in r[0]:
+                del(r[-1])
+                r[1] = r[1].replace("manual", "static")
+                r.append("    address %s\n" % ip)
+                r.append("    gateway %s\n" % gw)
+                r.append("\n")
 
         new_interfaces = ''.join([item for sublist in ret for item in sublist])
         f = open("/etc/network/interfaces", "w")
@@ -90,6 +85,7 @@ def install():
         # (should not happen unless you build an lxd on this host before deploying this charm)
         devstack.run_command(["ifconfig", data_port, "down"], username="root")
         devstack.run_command(["brctl", "delbr", data_port], username="root")
+        devstack.run_command(["dhclient", "-v", data_port.replace("br-", "")], username="root")
     d = devstack.Devstack(username=devstack.DEFAULT_USER)
     d.run()
 
