@@ -486,7 +486,6 @@ class Devstack(object):
         context["devstack_ip"] = devstack_ip
         if context["enable_tunneling"]:
             data_port = self._get_data_port()
-            hookenv.log("Data port is: %s" % data_port )
             try:
                 data_port_ip = netifaces.ifaddresses(data_port)[netifaces.AF_INET][0]['addr']
             except KeyError:
