@@ -38,7 +38,7 @@ def install():
     # remove juju 2.x created bridge
     data_ports = config.get("data-port", "eth1")
     data_port = devstack.get_port(data_ports)
-    if data_port.startswith("br-"):
+    if data_port.startswith("br-")
         devstack.run_command(["brctl", "delif", data_port, data_port.replace("br-", "")], username="root")
         devstack.run_command(["brctl", "delbr", data_port], username="root")
     d = devstack.Devstack(username=devstack.DEFAULT_USER)
