@@ -604,8 +604,8 @@ class Devstack(object):
             run_command(["dhclient", "br-%s" % self.context["data_iface"]], username="root")
             br_ex_ip = netifaces.ifaddresses(EXT_BR)[netifaces.AF_INET][0]['addr']
             br_ex_mask = netifaces.ifaddresses(EXT_BR)[netifaces.AF_INET][0]['netmask']
-            run_command(["iptables", "-t", "nat", "-A", "POSTROUTING", "-s", "%s/%s" % (br_ex_ip, br_ex_mask), "! -d", 
-                "%s/%s" % (br_ex_ip, br_ex_mask), "-j", "MASQUERADE"], username="root")
+            run_command(["iptables", "-t", "nat", "-A", "POSTROUTING", "-s", "%s/%s" % (br_ex_ip, br_ex_mask), "-o", 
+                "juju-br0", "-j", "MASQUERADE"], username="root")
         else:
             assign_ext_port = [
                 "ovs-vsctl", "--", "--may-exist", "add-port", EXT_BR, self.context["ext_iface"],
