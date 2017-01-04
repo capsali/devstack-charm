@@ -487,19 +487,11 @@ class Devstack(object):
         if context["enable_tunneling"]:
             data_port = self._get_data_port()
             hookenv.log("Data port is: %s" % data_port )
-            # try catch because:
-            # when running install data_port should be the physical interface, when running the devstack-relation-joined
-            # it will run this again and find the ovs bridge as the data_port
             try:
                 data_port_ip = netifaces.ifaddresses(data_port)[netifaces.AF_INET][0]['addr']
             except KeyError:
-                hookenv.log("Cannot find ip set on interface %s" % data_port )
-                try:
-                    data_port = data_port.replace("br-", "")
-                    hookenv.log("Looking for ip on %s" % data_port )
-                    data_port_ip = netifaces.ifaddresses(data_port)[netifaces.AF_INET][0]['addr']
-                except KeyError:
-                    hookenv.log("Cannot find ip set on interface %s" % data_port )
+                data_port = data_port.replace("br-", "")
+                data_port_ip = netifaces.ifaddresses(data_port)[netifaces.AF_INET][0]['addr']
             hookenv.log("Using data port %s with IP %s for OVS local_ip" % (data_port, data_port_ip))
             context["tunnel_endpoint_ip"] = data_port_ip
         context["password"] = self.password
