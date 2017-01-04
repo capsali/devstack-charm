@@ -600,12 +600,14 @@ class Devstack(object):
         run_command(assign_data_port, username="root")
 
         if self.context["enable_tunneling"]:
+            data_eth_ip = netifaces.ifaddresses(self.context["data_iface"])[netifaces.AF_INET][0]['addr']
+            data_eth_mask = netifaces.ifaddresses(self.context["data_iface"])[netifaces.AF_INET][0]['netmask']
             run_command(["ifconfig", self.context["data_iface"], "0.0.0.0", "promisc", "up"], username="root")
-            run_command(["dhclient", "br-%s" % self.context["data_iface"]], username="root")
-            br_ex_ip = netifaces.ifaddresses(EXT_BR)[netifaces.AF_INET][0]['addr']
-            br_ex_mask = netifaces.ifaddresses(EXT_BR)[netifaces.AF_INET][0]['netmask']
-            run_command(["iptables", "-t", "nat", "-A", "POSTROUTING", "-s", "%s/%s" % (br_ex_ip, br_ex_mask), "-o", 
-                "juju-br0", "-j", "MASQUERADE"], username="root")
+            run_command(["ifconfig", "br-%s" % self.context["data_iface"], "%s" % data_eth_ip, "netmask", "%s" % data_eth_mask], username="root")
+            #br_ex_ip = netifaces.ifaddresses(EXT_BR)[netifaces.AF_INET][0]['addr']
+            #br_ex_mask = netifaces.ifaddresses(EXT_BR)[netifaces.AF_INET][0]['netmask']
+            #run_command(["iptables", "-t", "nat", "-A", "POSTROUTING", "-s", "%s/%s" % (br_ex_ip, br_ex_mask), "! -d", 
+            #    "%s/%s" % (br_ex_ip, br_ex_mask), "-j", "MASQUERADE"], username="root")
         else:
             assign_ext_port = [
                 "ovs-vsctl", "--", "--may-exist", "add-port", EXT_BR, self.context["ext_iface"],
